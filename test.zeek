@@ -1,21 +1,21 @@
-global ip_list: table[addr] of set[string];
-event http_ua(c: connection, name: string, value: string)
-{
-	local ip :addr =c$id$orig_h;
-	if(name=="USER-AGENT")
-	{
-		if(ip !in ip_list)
-			ip_list[ip]=set(to_lower(value));
-		else
-			add ip_list[ip][to_lower(value)];
+global proxy_detect_table :table[addr] of set[string] = table();
+
+
+event http_header (c: connection, is_orig: bool, name: string, value: string){
+	if(c$http?$user_agent){
+		local src_ip=c$id$orig_h;
+		local user_agent=to_lower(c$http$user_agent);
+		if(src_ip in proxy_detect_table){
+			add (proxy_detect_table[src_ip])[user_agent];
+		}else{
+			proxy_detect_table[src_ip]=set(user_agent);
+		}
 	}
 }
- 
 event zeek_done()
-{	
-	for (sourceip in ip_list)
-	{
-		if(|ip_list[sourceip]|>3)
-			print (fmt("%s is a proxy",sourceip));
+{
+	for (src_ip in proxy_detect_table){
+		if(|proxy_detect_table[src_ip]|>=3)
+			print fmt("%s is a proxy",src_ip);
 	}
 }
